@@ -1,0 +1,12 @@
+flask
+pdfplumber
+jinja2
+ollama
+werkzeug
+flask-sqlalchemy
+pandas
+openpyxl
+requests
+beautifulsoup4
+lxml
+playwright

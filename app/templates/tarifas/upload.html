@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importar Tarifa</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; padding: 40px; border-radius: 8px; }
+        h1 { color: #1f2937; margin-bottom: 10px; }
+        .subtitle { color: #6b7280; margin-bottom: 30px; }
+        .form-group { margin-bottom: 25px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; color: #374151; }
+        .file-drop { border: 2px dashed #d1d5db; padding: 40px; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.3s; }
+        .file-drop:hover { border-color: #2563eb; background: #eff6ff; }
+        .file-drop input { display: none; }
+        .file-icon { font-size: 48px; margin-bottom: 15px; }
+        .btn { display: inline-block; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: 600; text-decoration: none; }
+        .btn-primary { background: #2563eb; color: white; width: 100%; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .info-box { background: #eff6ff; padding: 15px; border-radius: 5px; margin-bottom: 25px; border-left: 4px solid #2563eb; }
+        .info-box h3 { color: #1e40af; margin-bottom: 10px; font-size: 14px; }
+        .info-box ul { margin-left: 20px; color: #1e40af; }
+        .info-box li { margin-bottom: 5px; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #2563eb; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/tarifas" class="back-link">← Volver a tarifas</a>
+
+        <div class="card">
+            <h1>Importar Tarifa</h1>
+            <p class="subtitle">Sube un archivo Excel o CSV con tus productos</p>
+
+            <div class="info-box">
+                <h3>Formato del archivo</h3>
+                <ul>
+                    <li>Columnas requeridas: <strong>código</strong> y <strong>nombre</strong></li>
+                    <li>Columnas opcionales: descripción, pdf_url, precio, unidad</li>
+                    <li>Formatos aceptados: .xlsx, .xls, .csv</li>
+                </ul>
+            </div>
+
+            <form action="/tarifas/upload" method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>Archivo de tarifa</label>
+                    <label class="file-drop">
+                        <input type="file" name="tariff_file" accept=".xlsx,.xls,.csv" required id="fileInput">
+                        <div class="file-icon">📁</div>
+                        <div id="fileName">Haz clic o arrastra tu archivo aquí</div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-top: 10px;">
+                            Excel (.xlsx, .xls) o CSV
+                        </div>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Importar Tarifa</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                fileName.textContent = e.target.files[0].name;
+            }
+        });
+    </script>
+</body>
+</html>

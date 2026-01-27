@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Tarifas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .stats { display: flex; gap: 20px; }
+        .stat-card { background: #f9f9f9; padding: 15px 25px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #2563eb; }
+        .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+        .actions { display: flex; gap: 10px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-secondary { background: #6b7280; color: white; }
+        table { width: 100%; background: white; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f9f9f9; font-weight: 600; color: #374151; }
+        tr:hover { background: #f9f9f9; }
+        .badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-error { background: #fee2e2; color: #991b1b; }
+        .nav-links { margin-bottom: 20px; }
+        .nav-links a { color: #2563eb; text-decoration: none; margin-right: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/">← Volver al inicio</a>
+        </div>
+
+        <div class="header">
+            <div>
+                <h1 style="color: #1f2937;">Gestión de Tarifas</h1>
+                <p style="color: #6b7280; margin-top: 5px;">Importa tarifas y procesa fichas técnicas con Ollama</p>
+            </div>
+            <div class="actions">
+                <a href="/tarifas/upload" class="btn btn-primary">+ Importar Tarifa</a>
+                <a href="/tarifas/export" class="btn btn-success">Exportar Excel</a>
+            </div>
+        </div>
+
+        <div class="stats" style="margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total }}</div>
+                <div class="stat-label">Total Productos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: #10b981;">{{ stats.processed }}</div>
+                <div class="stat-label">Procesados</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: #f59e0b;">{{ stats.pending }}</div>
+                <div class="stat-label">Pendientes</div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Precio</th>
+                    <th>PDF</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td><strong>{{ product.code }}</strong></td>
+                    <td>{{ product.name }}</td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ product.description or '-' }}
+                    </td>
+                    <td>
+                        {% if product.price %}
+                        {{ "%.2f"|format(product.price) }}€
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if product.pdf_url %}
+                        <a href="{{ product.pdf_url }}" target="_blank" style="color: #2563eb;">Ver PDF</a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if product.processed %}
+                        <span class="badge badge-success">Procesado</span>
+                        {% elif product.processing_status == 'processing' %}
+                        <span class="badge badge-warning">Procesando...</span>
+                        {% elif product.processing_status == 'error' %}
+                        <span class="badge badge-error">Error</span>
+                        {% else %}
+                        <span class="badge" style="background: #e5e7eb; color: #374151;">Pendiente</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/tarifas/product/{{ product.id }}" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">Ver</a>
+                        {% if product.pdf_url and not product.processed %}
+                        <button onclick="processProduct({{ product.id }})" class="btn btn-primary" style="padding: 5px 10px; font-size: 12px;">Procesar</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">
+                        No hay productos. <a href="/tarifas/upload" style="color: #2563eb;">Importa una tarifa</a> para comenzar.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function processProduct(productId) {
+            const model = 'llama3.2:3b';
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Procesando...';
+
+            try {
+                const formData = new FormData();
+                formData.append('model', model);
+
+                const response = await fetch(`/tarifas/product/${productId}/process`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Producto procesado correctamente');
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.error);
+                    btn.disabled = false;
+                    btn.textContent = 'Procesar';
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = 'Procesar';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Debug</title>
+</head>
+<body style="background: white; color: black; padding: 20px;">
+    <h1 style="color: blue;">PAGINA DE DEBUG</h1>
+    <p>Si ves esto, el HTML funciona.</p>
+
+    <hr>
+
+    <h2>Diagnosticar errores:</h2>
+    <ol>
+        <li>Abre la consola del navegador (F12)</li>
+        <li>Ve a la pestaña "Console"</li>
+        <li>Busca errores en rojo</li>
+        <li>Ve a la pestaña "Network"</li>
+        <li>Recarga la pagina (F5)</li>
+        <li>Mira que recursos tienen errores (en rojo)</li>
+    </ol>
+
+    <hr>
+
+    <h2>Recursos cargados:</h2>
+    <div id="resources"></div>
+
+    <hr>
+
+    <button onclick="alert('JavaScript funciona')" style="padding: 15px; font-size: 18px;">
+        Probar JavaScript
+    </button>
+
+    <script>
+        // Mostrar todos los recursos cargados
+        window.addEventListener('load', function() {
+            var resources = performance.getEntriesByType('resource');
+            var html = '<ul>';
+            resources.forEach(function(r) {
+                var status = r.transferSize > 0 ? '✅' : '❓';
+                html += '<li>' + status + ' ' + r.name + '</li>';
+            });
+            html += '</ul>';
+            document.getElementById('resources').innerHTML = html;
+        });
+
+        console.log('=== DEBUG INFO ===');
+        console.log('URL:', window.location.href);
+        console.log('User Agent:', navigator.userAgent);
+        console.log('==================');
+    </script>
+</body>
+</html>

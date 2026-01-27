@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scraper Disano</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card { background: white; padding: 40px; border-radius: 8px; margin-bottom: 20px; }
+        h1 { color: #1f2937; margin-bottom: 10px; }
+        .subtitle { color: #6b7280; margin-bottom: 30px; }
+        .info-box { background: #eff6ff; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin-bottom: 30px; }
+        .info-box h3 { color: #1e40af; margin-bottom: 10px; }
+        .info-box p { color: #1e40af; line-height: 1.6; }
+        .btn { display: inline-block; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: 600; text-decoration: none; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .results { margin-top: 30px; display: none; }
+        .results.show { display: block; }
+        .result-item { background: #f9f9f9; padding: 15px; margin-bottom: 10px; border-radius: 5px; }
+        .result-item h4 { color: #1f2937; margin-bottom: 5px; }
+        .result-item p { color: #6b7280; font-size: 14px; }
+        .stats { display: flex; gap: 20px; margin-top: 20px; }
+        .stat { background: #f3f4f6; padding: 20px; border-radius: 8px; flex: 1; text-align: center; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #2563eb; }
+        .stat-label { color: #6b7280; font-size: 14px; margin-top: 5px; }
+        .progress { margin-top: 20px; display: none; }
+        .progress-bar { width: 100%; height: 30px; background: #e5e7eb; border-radius: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #2563eb; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #2563eb; text-decoration: none; }
+        .log { background: #1f2937; color: #10b981; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; margin-top: 20px; max-height: 200px; overflow-y: auto; }
+        .log-entry { margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/tarifas" class="back-link">← Volver a tarifas</a>
+
+        <div class="card">
+            <h1>Scraper Disano</h1>
+            <p class="subtitle">Extrae automáticamente todas las fichas técnicas en PDF de la web de Disano</p>
+
+            <div class="info-box">
+                <h3>¿Qué hace este scraper?</h3>
+                <p>
+                    • Navega por las categorías de productos de Disano<br>
+                    • Encuentra todos los enlaces a fichas técnicas en PDF<br>
+                    • Importa los productos a la base de datos automáticamente<br>
+                    • Guarda las URLs de los PDFs para procesarlos con Ollama
+                </p>
+            </div>
+
+            <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px; color: #1f2937;">Configuración</h3>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 5px;">Número de categorías:</label>
+                    <select id="maxCategories" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                        <option value="1">1 categoría (prueba rápida)</option>
+                        <option value="3" selected>3 categorías (recomendado)</option>
+                        <option value="5">5 categorías</option>
+                        <option value="10">10 categorías</option>
+                        <option value="24">Todas (24)</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 5px;">Productos por categoría:</label>
+                    <select id="maxProducts" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                        <option value="5">5 productos (muy rápido)</option>
+                        <option value="10" selected>10 productos (recomendado)</option>
+                        <option value="20">20 productos</option>
+                        <option value="50">50 productos</option>
+                        <option value="0">Sin límite</option>
+                    </select>
+                </div>
+
+                <p style="font-size: 14px; color: #6b7280;">
+                    <strong>Nota:</strong> Más categorías y productos = más tiempo de procesamiento.
+                </p>
+            </div>
+
+            <button id="startBtn" class="btn btn-primary" onclick="startScraper()">
+                Iniciar Scraping
+            </button>
+
+            <div id="progress" class="progress">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+                </div>
+            </div>
+
+            <div id="log" class="log" style="display: none;"></div>
+        </div>
+
+        <div id="results" class="results card">
+            <h2 style="margin-bottom: 20px;">Resultados</h2>
+
+            <div class="stats">
+                <div class="stat">
+                    <div id="pdfsFound" class="stat-value">0</div>
+                    <div class="stat-label">PDFs Encontrados</div>
+                </div>
+                <div class="stat">
+                    <div id="productsAdded" class="stat-value">0</div>
+                    <div class="stat-label">Productos Añadidos</div>
+                </div>
+                <div class="stat">
+                    <div id="productsUpdated" class="stat-value">0</div>
+                    <div class="stat-label">Productos Actualizados</div>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 30px; margin-bottom: 15px;">Primeros 10 PDFs encontrados:</h3>
+            <div id="pdfList"></div>
+
+            <div style="margin-top: 30px; text-align: center;">
+                <a href="/tarifas" class="btn btn-success">Ver Productos en Tarifas</a>
+                <a href="/tarifas" class="btn btn-secondary" onclick="return processAll();">Procesar Todos con Ollama</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateProgress(percent, message) {
+            const progressFill = document.getElementById('progressFill');
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = percent + '%';
+            if (message) addLog(message);
+        }
+
+        async function startScraper() {
+            const btn = document.getElementById('startBtn');
+            const progress = document.getElementById('progress');
+            const log = document.getElementById('log');
+
+            btn.disabled = true;
+            btn.textContent = 'Scrapeando... (puede tardar varios minutos)';
+            progress.style.display = 'block';
+            log.style.display = 'block';
+
+            addLog('Iniciando scraper de Disano...');
+
+            try {
+                updateProgress(10, 'Conectando con Disano...');
+
+                // Obtener configuración
+                const maxCategories = document.getElementById('maxCategories').value;
+                const maxProducts = document.getElementById('maxProducts').value;
+
+                addLog(`Configuración: ${maxCategories} categorías, ${maxProducts} productos/categoría`);
+
+                // Crear formulario con los datos
+                const formData = new FormData();
+                formData.append('max_categories', maxCategories);
+                formData.append('max_products', maxProducts);
+
+                const response = await fetch('/scraper/disano/run', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                updateProgress(50, 'Procesando resultados...');
+
+                const result = await response.json();
+
+                if (result.success) {
+                    updateProgress(100, '¡Scraping completado!');
+
+                    // Mostrar resultados
+                    document.getElementById('pdfsFound').textContent = result.pdfs_found;
+                    document.getElementById('productsAdded').textContent = result.products_added;
+                    document.getElementById('productsUpdated').textContent = result.products_updated;
+
+                    // Mostrar lista de PDFs
+                    const pdfList = document.getElementById('pdfList');
+                    pdfList.innerHTML = '';
+
+                    result.pdfs.forEach(pdf => {
+                        const item = document.createElement('div');
+                        item.className = 'result-item';
+                        item.innerHTML = `
+                            <h4>${pdf.name}</h4>
+                            <p><strong>Código:</strong> ${pdf.product_code || 'N/A'}</p>
+                            <p><strong>URL:</strong> <a href="${pdf.url}" target="_blank">${pdf.url}</a></p>
+                        `;
+                        pdfList.appendChild(item);
+                    });
+
+                    // Mostrar sección de resultados
+                    document.getElementById('results').classList.add('show');
+
+                    addLog(`✓ ${result.pdfs_found} PDFs encontrados`);
+                    addLog(`✓ ${result.products_added} productos añadidos`);
+                    addLog(`✓ ${result.products_updated} productos actualizados`);
+                } else {
+                    addLog('✗ Error: ' + result.error);
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                addLog('✗ Error: ' + error.message);
+                alert('Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Iniciar Scraping';
+            }
+        }
+
+        function processAll() {
+            alert('Esta función procesará todos los productos con Ollama. Implementación pendiente.');
+            return false;
+        }
+    </script>
+</body>
+</html>

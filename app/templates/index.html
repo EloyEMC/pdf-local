@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to BC3</title>
+</head>
+<body style="font-family: Arial; background: white; color: black; padding: 20px;">
+    <div style="max-width: 700px; margin: 0 auto;">
+        <h1 style="color: #2563eb;">PDF to BC3</h1>
+        <p style="color: #666;">Conversor de fichas técnicas a formato BC3 usando Ollama</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div style="padding: 15px; margin-bottom: 20px; border-radius: 5px; background: {% if category == 'success' %}#d4edda; color: #155724{% elif category == 'error' %}#f8d7da; color: #721c24{% else %}#d1ecf1; color: #0c5460{% endif %};">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div style="background: #f9f9f9; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
+            <h2>Subir ficha técnica</h2>
+            <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Archivo PDF:</label>
+                    <input type="file" name="pdf_file" accept=".pdf" required style="width: 100%; padding: 10px; border: 2px dashed #ccc; border-radius: 5px;">
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" name="use_ollama" checked style="width: 20px; height: 20px;">
+                        <span>Usar Ollama para extracción inteligente</span>
+                    </label>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Modelo Ollama:</label>
+                    <select name="model" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+                        <option value="llama3.2:3b" selected>Llama 3.2 3B (Rapido)</option>
+                        <option value="llama3.2">Llama 3.2 (Completo)</option>
+                        <option value="mistral:7b">Mistral 7B</option>
+                        <option value="phi3">Phi 3</option>
+                    </select>
+                </div>
+
+                <button type="submit" style="width: 100%; background: #2563eb; color: white; padding: 15px; border: none; border-radius: 5px; font-size: 18px; font-weight: bold; cursor: pointer;">
+                    PROCESAR PDF
+                </button>
+            </form>
+        </div>
+
+        {% if extracted_data %}
+            <h2>Datos extraidos</h2>
+
+            {% if extracted_data.codigo_producto %}
+                <div style="background: #f9f9f9; padding: 20px; margin-bottom: 15px; border-radius: 5px;">
+                    <strong>Codigo:</strong> {{ extracted_data.codigo_producto }}
+                </div>
+            {% endif %}
+
+            {% if extracted_data.nombre %}
+                <div style="background: #f9f9f9; padding: 20px; margin-bottom: 15px; border-radius: 5px;">
+                    <strong>Nombre:</strong> {{ extracted_data.nombre }}
+                </div>
+            {% endif %}
+
+            {% if extracted_data.descripcion %}
+                <div style="background: #f9f9f9; padding: 20px; margin-bottom: 15px; border-radius: 5px;">
+                    <strong>Descripcion:</strong> {{ extracted_data.descripcion }}
+                </div>
+            {% endif %}
+
+            {% if extracted_data.dimensiones %}
+                <div style="background: #f9f9f9; padding: 20px; margin-bottom: 15px; border-radius: 5px;">
+                    <strong>Dimensiones:</strong>
+                    <ul>
+                        {% for key, value in extracted_data.dimensiones.items() %}
+                            {% if value %}
+                                <li>{{ key }}: {{ value }}</li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="{{ url_for('download_bc3') }}" style="display: inline-block; background: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin-right: 10px; font-weight: bold;">
+                    DESCARGAR BC3
+                </a>
+                <a href="{{ url_for('index') }}" style="display: inline-block; background: #6b7280; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                    NUEVO ARCHIVO
+                </a>
+            </div>
+        {% endif %}
+
+        <p style="text-align: center; margin-top: 40px; color: #999; font-size: 14px;">
+            Powered by Ollama - 100% Local - No data leaves your computer
+        </p>
+    </div>
+
+    <script>
+        console.log('Pagina cargada');
+        var fileInput = document.getElementById('pdf_file');
+        if (fileInput) {
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    console.log('Archivo seleccionado:', e.target.files[0].name);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
