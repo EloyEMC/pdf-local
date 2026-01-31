@@ -1,6 +1,8 @@
 import ollama
 import json
 from typing import Dict, Any, List, Optional
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import threading
 
 # Importar nuevas utilidades
 from .cache_manager import CacheManager
@@ -18,16 +20,18 @@ Tu tarea es extraer información estructurada del texto proporcionado y devolver
 class OllamaClient:
     """Cliente para interactuar con Ollama localmente."""
 
-    def __init__(self, model: str = MODEL, use_cache: bool = True):
+    def __init__(self, model: str = MODEL, use_cache: bool = True, timeout: int = 600):
         """
         Inicializa el cliente de Ollama.
 
         Args:
             model: Modelo de Ollama a usar
             use_cache: Si True, usa caché para resultados
+            timeout: Timeout en segundos para llamadas a Ollama (default: 600 = 10 minutos)
         """
         self.model = model
         self.use_cache = use_cache
+        self.timeout = timeout
         self.cache = CacheManager() if use_cache else None
 
     def chat(self, prompt: str, system_prompt: str = None) -> str:
@@ -40,6 +44,9 @@ class OllamaClient:
 
         Returns:
             Respuesta del modelo
+
+        Raises:
+            Exception: Si hay error de comunicación o timeout
         """
         messages = []
 
@@ -49,9 +56,21 @@ class OllamaClient:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            response = ollama.chat(model=self.model, messages=messages)
-            return response["message"]["content"]
+            # Usar ThreadPoolExecutor para implementar timeout
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: ollama.chat(model=self.model, messages=messages)
+                )
+                try:
+                    response = future.result(timeout=self.timeout)
+                    return response["message"]["content"]
+                except FutureTimeoutError:
+                    # Cancelar el futuro si timeout
+                    future.cancel()
+                    raise Exception(f"Timeout después de {self.timeout} segundos esperando respuesta de Ollama")
         except Exception as e:
+            if "Timeout" in str(e):
+                raise
             raise Exception(f"Error comunicando con Ollama: {str(e)}")
 
     def extract_data_from_pdf(self, pdf_text: str, pdf_path: str = None) -> Dict[str, Any]:
@@ -297,7 +316,7 @@ Responde solo con el contenido del archivo BC3, sin explicaciones adicionales.""
 
 
 # Funciones auxiliares para facilitar el uso
-def extract_pdf_data(pdf_text: str, model: str = None, pdf_path: str = None) -> Dict[str, Any]:
+def extract_pdf_data(pdf_text: str, model: str = None, pdf_path: str = None, timeout: int = 600) -> Dict[str, Any]:
     """
     Función auxiliar para extraer datos de un PDF.
 
@@ -305,24 +324,26 @@ def extract_pdf_data(pdf_text: str, model: str = None, pdf_path: str = None) -> 
         pdf_text: Texto del PDF
         model: Modelo a usar (opcional)
         pdf_path: Ruta del PDF para caché (opcional)
+        timeout: Timeout en segundos (opcional)
 
     Returns:
         Diccionario con datos extraídos
     """
-    client = OllamaClient(model=model or MODEL, use_cache=True)
+    client = OllamaClient(model=model or MODEL, use_cache=True, timeout=timeout)
     return client.extract_data_from_pdf(pdf_text, pdf_path=pdf_path)
 
 
-def generate_bc3(extracted_data: Dict[str, Any], model: str = None) -> str:
+def generate_bc3(extracted_data: Dict[str, Any], model: str = None, timeout: int = 600) -> str:
     """
     Función auxiliar para generar BC3.
 
     Args:
         extracted_data: Datos extraídos del PDF
         model: Modelo a usar (opcional)
+        timeout: Timeout en segundos (opcional)
 
     Returns:
         String con formato BC3
     """
-    client = OllamaClient(model=model or MODEL)
+    client = OllamaClient(model=model or MODEL, timeout=timeout)
     return client.generate_bc3_structure(extracted_data)

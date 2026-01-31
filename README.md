@@ -1,6 +1,6 @@
-# PDF to BC3 - Procesamiento de Fichas Técnicas con Ollama
+# PDF to BC3 - Procesamiento de Fichas Técnicas con IA
 
-Sistema completo para procesar fichas técnicas en PDF y extraer información estructurada en formato BC3 utilizando modelos de lenguaje local (Ollama).
+Sistema completo para procesar fichas técnicas en PDF y extraer información estructurada en formato BC3 utilizando modelos de lenguaje local (Ollama) y Anthropic Claude API.
 
 ## 🎯 Características Principales
 
@@ -14,11 +14,20 @@ Sistema completo para procesar fichas técnicas en PDF y extraer información es
 - **Sistema de caché** para evitar reprocesamiento
 - **Chunking inteligente** para PDFs largos
 
+### Procesamiento por Lotes con Anthropic
+- **Procesamiento masivo** con Claude Haiku API
+- **Velocidad optimizada**: ~18 segundos/texto (15x más rápido que Ollama)
+- **Coste eficiente**: ~$0.50 por cada 100 textos
+- **Flujo híbrido**: PDF → JSON → Base de datos
+- **Reintentos automáticos** con exponential backoff
+- **Persistencia intermedia** en JSON para evitar pérdida de datos
+
 ### Gestión de Tarifas
-- **Base de datos SQLite** con productos de Disano
+- **Base de datos SQLite** con 8,288 productos de Disano
 - **Procesamiento por lotes** de todas las fichas técnicas
 - **Actualización incremental** (saltar ya procesados)
 - **Interfaz web** con Flask para visualizar y gestionar productos
+- **Exportación a Excel** con datos completos
 
 ### Scraper
 - **Scraper de Disano** con Playwright
@@ -32,7 +41,7 @@ Sistema completo para procesar fichas técnicas en PDF y extraer información es
 python --version  # Debe ser 3.8 o superior
 ```
 
-### 2. Ollama Instalado
+### 2. Ollama (Opcional - Para procesamiento local)
 
 **macOS:**
 ```bash
@@ -47,28 +56,21 @@ curl -fsSL https://ollama.com/install.sh | sh
 **Windows:**
 Descargar desde [ollama.com](https://ollama.com/download)
 
-### 3. Modelo Recomendado: DeepSeek R1
-```bash
-# Iniciar Ollama
-ollama serve
-
-# Descargar modelo recomendado
-ollama pull deepseek-r1:latest
-
-# Modelo alternativo (más ligero)
-ollama pull llama3.2:3b
+### 3. Anthropic API Key (Recomendado para procesamiento por lotes)
+Crear archivo `.env`:
+```
+ANTHROPIC_API_KEY=your_key_here
 ```
 
 ## 🚀 Instalación
 
 ```bash
-# Clonar el repositorio (si aplica)
+# Clonar el repositorio
 cd /Volumes/WEBS/Pdf-local
 
 # Crear entorno virtual
 python -m venv venv
 source venv/bin/activate  # macOS/Linux
-# venv\Scripts\activate  # Windows
 
 # Instalar dependencias
 pip install -r requirements.txt
@@ -80,8 +82,6 @@ pip install -r requirements.txt
 pdf-local/
 ├── app/                        # Aplicación Flask
 │   ├── bc3/                   # Generación de archivos BC3
-│   │   ├── __init__.py
-│   │   └── generator.py
 │   ├── static/                # CSS, JS, favicon
 │   ├── templates/             # Plantillas HTML
 │   ├── utils/                 # Utilidades principales
@@ -89,39 +89,43 @@ pdf-local/
 │   │   ├── cache_manager.py   # Sistema de caché
 │   │   ├── json_validator.py  # Validación de JSON
 │   │   ├── ollama_client.py   # Cliente de Ollama
+│   │   ├── anthropic_extractor.py  # Cliente Anthropic
 │   │   ├── pdf_extractor.py   # Extracción de texto de PDFs
-│   │   ├── tariff_processor.py # Procesador de tarifas
-│   │   ├── disano_scraper.py  # Scraper de Disano
 │   │   └── __init__.py
 │   ├── config.py              # Configuración
-│   ├── main.py                # Punto de entrada
-│   └── models.py              # Modelos de BD
+│   └── main.py                # Punto de entrada
 │
 ├── scripts/                    # Scripts utilitarios
-│   ├── process_all_pdfs.py    # Procesar todas las fichas técnicas
-│   ├── comparar_modelos.py    # Comparar modelos de Ollama
-│   ├── diagnose.py            # Diagnóstico del sistema
-│   └── investigate_structure.py # Investigar estructura de BD
+│   ├── batch/                 # Procesamiento por lotes
+│   │   ├── process_all_pdfs.py
+│   │   ├── process_to_json.py
+│   │   ├── process_texts_batch_api.py
+│   │   └── update_db_from_json.py
+│   ├── monitoring/            # Scripts de monitoreo
+│   │   ├── check_progress.py
+│   │   ├── check_errors.py
+│   │   └── retry_failed.py
+│   └── utils/                 # Scripts utilitarios
+│       ├── export_to_excel.py
+│       ├── diagnose.py
+│       └── debug_process.py
 │
 ├── tests/                      # Tests
-│   ├── test_bc3_extractor.py
-│   ├── test_playwright_scraper.py
-│   └── test_scraper_*.py
-│
-├── docs/                       # Documentación
+├── docs/                       # Documentación detallada
+│   ├── WORKFLOW_HIBRIDO.md    # Flujo PDF→JSON→BD
 │   ├── DOCS_BC3_EXTRACTOR.md  # Documentación del extractor BC3
 │   ├── SCRAPER.md             # Documentación del scraper
-│   ├── TARIFAS.md             # Documentación de tarifas
-│   └── INICIO.md              # Documentación de inicio
+│   └── TARIFAS.md             # Documentación de tarifas
 │
 ├── database/                   # Bases de datos
-│   └── tarifa_disano.db       # BD principal de productos
+│   └── tarifa_disano.db       # BD principal (8,288 productos, 23MB)
 │
 ├── cache/                      # Caché de procesamientos
 ├── uploads/                    # PDFs subidos vía web
 ├── samples/                    # Ejemplos de PDFs
 ├── outputs/                    # Archivos BC3 generados
 ├── requirements.txt            # Dependencias Python
+├── CHANGELOG.md                # Historial de cambios
 └── README.md                   # Este archivo
 ```
 
@@ -143,28 +147,49 @@ http://localhost:5001
 - `/tarifas` - Ver tarifas de Disano
 - `/tarifas/product/<id>` - Ver detalle de producto
 
-### 2. Procesar Todas las Fichas Técnicas
+### 2. Procesamiento por Lotes (Recomendado)
+
+**Flujo completo en 3 pasos:**
 
 ```bash
-# Procesar todas las fichas de una carpeta y actualizar BD
+# Paso 1: Extraer textos de PDFs
+python scripts/extract_text_only.py
+
+# Paso 2: Procesar con Anthropic Haiku
+python scripts/process_texts_batch_api.py
+
+# Paso 3: Importar a base de datos
+python scripts/update_db_from_json.py
+```
+
+**O process todo en uno:**
+```bash
 python scripts/process_all_pdfs.py
-
-# El script:
-# - Escanea /Volumes/WEBS/disano-scraper/data/output/fichas_tecnicas
-# - Extrae texto y datos BC3 de cada PDF
-# - Actualiza la BD con los resultados
-# - Salta PDFs ya procesados
 ```
 
-**Configuración en `process_all_pdfs.py`:**
-```python
-PDF_FOLDER = "/Volumes/WEBS/disano-scraper/data/output/fichas_tecnicas"
-DB_PATH = "database/tarifa_disano.db"
-MODEL = "deepseek-r1:latest"
-TARGET_LANGUAGE = "es"
+### 3. Monitoreo de Proceso
+
+```bash
+# Ver progreso actual
+tail -f /tmp/anthropic_all.log
+
+# Script de monitoreo
+bash scripts/monitor_progress.sh
+
+# Ver errores
+python scripts/check_errors.py
 ```
 
-### 3. Probar un PDF Individual
+### 4. Exportar a Excel
+
+```bash
+# Exportar base de datos completa
+python scripts/export_to_excel.py
+
+# Guarda en ~/Documents/tarifa_disano_YYYYMMDD_HHMMSS.xlsx
+```
+
+### 5. Probar un PDF Individual
 
 ```bash
 # Prueba el extractor BC3 con un PDF específico
@@ -174,16 +199,27 @@ python tests/test_bc3_extractor.py ruta/al/pdf.pdf
 python tests/test_bc3_extractor.py ruta/al/pdf.pdf ca
 ```
 
-### 4. Comparar Modelos de Ollama
-
-```bash
-# Comparar calidad de salida entre modelos
-python scripts/comparar_modelos.py
-```
-
 ## ⚙️ Configuración
 
-### Modelo de Ollama
+### Anthropic API (Recomendado)
+
+**Archivo:** `.env`
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Configuración en `scripts/process_texts_batch_api.py`:**
+```python
+INPUT_DIR = os.path.expanduser("~/Documents/extracted_texts")
+OUTPUT_DIR = os.path.expanduser("~/Documents/processed_json")
+MODEL = "claude-3-5-haiku-latest"
+TARGET_LANGUAGE = "es"
+BATCH_SIZE = 100
+MAX_CONSECUTIVE_ERRORS = 5
+RETRY_DELAYS = [2, 5, 10, 30, 60]  # segundos
+```
+
+### Modelo de Ollama (Alternativa local)
 
 **Archivo:** `app/config.py`
 
@@ -208,60 +244,81 @@ MAX_PAGES_PER_CHUNK = 5     # Máximo de páginas por chunk
 OVERLAP_CHARS = 500         # Superposición entre chunks
 ```
 
-### Configuración de Caché
-
-**Archivo:** `app/utils/cache_manager.py`
-
-```python
-CACHE_TTL_HOURS = 24  # Tiempo de vida del caché
-CACHE_DIR = "cache"   # Directorio de caché
-```
-
 ## 📊 Base de Datos
 
-### Esquema de `productos`
+### Esquema Actual (39 campos)
 
 ```sql
 CREATE TABLE productos (
-    "CÓDIGO" TEXT PRIMARY KEY,
+    MARCA TEXT,
+    [CÓDIGO] TEXT PRIMARY KEY,
+    [CÓDIGO WEB] TEXT,
     REFERENCIA TEXT,
-    FAMILIA TEXT,
-    SUBFAMILIA TEXT,
-    NOMBRE TEXT,
-    PVP REAL,
-    -- ... más campos ...
+    [EAN 13] REAL,
+    DESCRIPCION TEXT,
+    [U.P.LOG] REAL,
+    [U.CAJA] INTEGER,
+    [DTO.] TEXT,
+    [CLASE ETIM] TEXT,
+    RAEE_A REAL, RAEE_L REAL, RAEE_T REAL,
+    [Peso bruto KG] REAL, [Peso bruto GR] REAL,
+    [Peso neto KG] REAL, [Peso neto GR] REAL,
+    [Longitud M] REAL, [Longitud MM] REAL,
+    [Ancho M] REAL, [Ancho MM] REAL,
+    [Alto M] REAL, [Altura MM] REAL,
+    [Volumen DM3] REAL, CM3 REAL,
+    Serie_familia_1 TEXT,
+    Familia_WEB TEXT,
+    Familia_Catalogo TEXT,
+    Familia_Catalogo_PTL TEXT,
+    imagen TEXT,
+    Url_ficha_tec TEXT,
+    descontinuado INTEGER,
+    descripcion_corta TEXT,
+    img_url TEXT,
+    [PVP_26_01_26] REAL,
 
-    -- Campos BC3 (añadidos)
-    texto_extraido TEXT,
+    -- Campos BC3 (5,286 productos procesados)
     bc3_descripcion_corta TEXT,
     bc3_descripcion_larga TEXT,
-    bc3_product_type TEXT,
-    ollama_processed INTEGER DEFAULT 0,
-    ollama_processed_at TIMESTAMP,
-    ollama_model TEXT
+    bc3_product_type TEXT,  -- 'columna' o 'articulacion'
+    bc3_processed_at TIMESTAMP
 );
 ```
+
+### Estadísticas Actuales
+
+- **Total productos**: 8,288
+- **Con BC3 procesado**: 5,286 (63.8%)
+- **Con URL de imagen**: 7,758 (93.6%)
+- **Tamaño BD**: 23 MB (optimizado)
 
 ### Consultas Útiles
 
 ```bash
-# Ver productos procesados
-sqlite3 database/tarifa_disano.db "SELECT COUNT(*) FROM productos WHERE ollama_processed = 1;"
+# Ver productos con BC3
+sqlite3 database/tarifa_disano.db "
+SELECT COUNT(*) FROM productos
+WHERE bc3_descripcion_corta IS NOT NULL;"
 
-# Ver un producto específico
-sqlite3 database/tarifa_disano.db "SELECT * FROM productos WHERE \"CÓDIGO\" = '15641639';"
+# Ver distribución de tipos
+sqlite3 database/tarifa_disano.db "
+SELECT bc3_product_type, COUNT(*)
+FROM productos
+WHERE bc3_product_type IS NOT NULL
+GROUP BY bc3_product_type;"
 
-# Ver descripciones BC3
-sqlite3 database/tarifa_disano.db "SELECT \"CÓDIGO\", NOMBRE, bc3_descripcion_corta FROM productos WHERE ollama_processed = 1 LIMIT 5;"
+# Buscar un producto específico
+sqlite3 database/tarifa_disano.db "
+SELECT * FROM productos
+WHERE [CÓDIGO] = '33036139';"
 ```
 
 ## 🔧 Extracción BC3
 
 ### Tipologías de Productos Soportadas
 
-El sistema detecta automáticamente la tipología basándose en:
-1. **Ruta del archivo** (prioridad)
-2. **Contenido del PDF** (fallback)
+El sistema detecta automáticamente la tipología:
 
 **Tipologías:**
 - `luminaria` - Luminarias LED, fluorescentes, etc.
@@ -322,41 +379,29 @@ result = extract_bc3_from_pdf(pdf_path, target_language='eu')
 result = extract_bc3_from_pdf(pdf_path, target_language='gl')
 ```
 
-## 🧹 Limpieza de Caché
+## 📈 Comparativa de Procesamiento
 
-```bash
-# Eliminar todo el caché
-rm -rf cache/*
+### Anthropic Claude Haiku (Recomendado)
+- ✅ **Velocidad**: ~18s/texto
+- ✅ **Coste**: ~$0.50 cada 100 textos
+- ✅ **Calidad**: Excelente comprensión técnica
+- ✅ **Consistencia**: 100% éxito en 4,022 textos
+- ✅ **Escalar**: Procesa miles sin degradación
 
-# O usar el script de diagnóstico
-python scripts/diagnose.py --clear-cache
-```
-
-## 📝 Notas de Implementación
-
-### Mejoras Implementadas
-
-1. **Sistema de Caché MD5**: Evita reprocesar PDFs ya procesados
-2. **Chunking Inteligente**: Divide PDFs largos en fragmentos con superposición
-3. **Validación Robusta de JSON**: Corrige errores comunes en respuestas de Ollama
-4. **Detección por Ruta**: Prioriza detección de tipología por estructura de carpetas
-5. **9 Certificaciones ISO**: Siempre incluidas en NORMAS Y CUMPLIMIENTO
-6. **Limpieza de Markdown**: Elimina negritas y formato Markdown de las respuestas
-
-### Configuración de Modelos
-
-**DeepSeek R1 (Recomendado):**
-- ✅ Mejor calidad de salida
-- ✅ Sin secciones duplicadas
-- ✅ Captura tablas de combinaciones
-- ❌ Más lento (requiere más recursos)
-
-**Llama 3.2 3B (Alternativa ligera):**
-- ✅ Rápido y ligero
-- ⚠️ Calidad aceptable pero inferior
-- ✅ Bueno para pruebas
+### Ollama DeepSeek R1 (Local)
+- ✅ **Coste**: Gratis (solo computación)
+- ✅ **Privacidad**: Todo es local
+- ⚠️ **Velocidad**: ~45-90s/texto
+- ⚠️ **Requiere**: GPU para buen rendimiento
 
 ## 🐛 Solución de Problemas
+
+### Anthropic API Rate Limit
+
+```bash
+# El script ya incluye reintentos automáticos
+# Si persiste, aumentar RETRY_DELAYS en process_texts_batch_api.py
+```
 
 ### Ollama no responde
 
@@ -376,20 +421,13 @@ ollama serve
 MAX_CHARS_PER_CHUNK = 6000  # en lugar de 8000
 ```
 
-### Errores de JSON en Ollama
-
-El sistema incluye `JSONValidator` que corrige automáticamente:
-- Comillas simples → dobles
-- Trailing commas
-- Comentarios de JavaScript
-- Valores sin comillas
-
 ## 📚 Documentación Adicional
 
+- [docs/WORKFLOW_HIBRIDO.md](docs/WORKFLOW_HIBRIDO.md) - Flujo híbrido PDF→JSON→BD
 - [docs/DOCS_BC3_EXTRACTOR.md](docs/DOCS_BC3_EXTRACTOR.md) - Documentación detallada del extractor BC3
 - [docs/SCRAPER.md](docs/SCRAPER.md) - Documentación del scraper de Disano
 - [docs/TARIFAS.md](docs/TARIFAS.md) - Documentación del sistema de tarifas
-- [docs/INICIO.md](docs/INICIO.md) - Guía de inicio rápido
+- [CHANGELOG.md](CHANGELOG.md) - Historial de cambios
 
 ## 📄 Licencia
 
@@ -397,6 +435,6 @@ Este proyecto es para uso interno y procesamiento de fichas técnicas de Disano.
 
 ---
 
-**Última actualización:** Enero 2025
-**Versión:** 2.0.0
-**Modelo recomendado:** DeepSeek R1
+**Última actualización:** Enero 2026
+**Versión:** 3.0.0
+**Modelo recomendado:** Claude 3.5 Haiku (API) o DeepSeek R1 (local)

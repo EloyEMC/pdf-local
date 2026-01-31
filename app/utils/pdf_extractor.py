@@ -291,7 +291,8 @@ def extract_bc3_from_pdf(
     pdf_path: str,
     model: str = "deepseek-r1:latest",
     target_language: str = 'es',
-    use_cache: bool = True
+    use_cache: bool = True,
+    timeout: int = 600
 ) -> Dict[str, Any]:
     """
     Extrae datos BC3 usando el sistema de dos peticiones.
@@ -301,6 +302,7 @@ def extract_bc3_from_pdf(
         model: Modelo de Ollama a usar
         target_language: Idioma de destino (es, ca, eu, gl)
         use_cache: Si True, usa caché
+        timeout: Timeout en segundos para llamadas a Ollama
 
     Returns:
         Dict con descripcion_corta, descripcion_larga y product_type
@@ -322,5 +324,6 @@ def extract_bc3_from_pdf(
         pdf_path=pdf_path,
         model=model,
         target_language=target_language,
-        use_cache=use_cache
+        use_cache=use_cache,
+        timeout=timeout
     )

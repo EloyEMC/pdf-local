@@ -91,15 +91,16 @@ PRODUCT_TYPES = {
 class BC3Extractor:
     """Extractor especializado para generar descripciones BC3."""
 
-    def __init__(self, model: str = "deepseek-r1:latest", use_cache: bool = True):
+    def __init__(self, model: str = "deepseek-r1:latest", use_cache: bool = True, timeout: int = 600):
         """
         Inicializa el extractor BC3.
 
         Args:
             model: Modelo de Ollama a usar
             use_cache: Si True, usa caché
+            timeout: Timeout en segundos para llamadas a Ollama (default: 600 = 10 minutos)
         """
-        self.client = OllamaClient(model=model, use_cache=use_cache)
+        self.client = OllamaClient(model=model, use_cache=use_cache, timeout=timeout)
         self.system_prompt = "Eres un experto en procesamiento de fichas técnicas y un traductor experto. Tu única tarea es extraer y generar la descripción en el idioma solicitado."
 
     def extract(self, pdf_text: str, pdf_path: str = None, target_language: str = 'es') -> Dict[str, Any]:
@@ -321,7 +322,8 @@ class BC3Extractor:
 
 **Instrucciones:**
 - El párrafo debe empezar **obligatoriamente** con: "{template}"
-- Incluir nombre del producto y código (si está disponible).
+- IMPORTANTE: Si NO encuentras un nombre específico del producto, usa SOLO el código. NO uses placeholders como "[Nombre del producto]" o "[NOMBRE]".
+- Formato correcto: "{template} (Código: XXXXX)" si no hay nombre, o "{template} Nombre del Producto (Código: XXXXX)" si hay nombre.
 - Incluir descripción general, aplicaciones y materiales principales.
 - Incluir datos técnicos clave más importantes.
 - Si tiene emergencia integrada, mencionarlo.
@@ -330,8 +332,10 @@ class BC3Extractor:
 
 {lang_instruction}
 
-**Ejemplo:**
-{template} [NOMBRE] (Código: [CÓDIGO]) [DESCRIPCIÓN GENERAL] de última generación con [CARACTERÍSTICAS PRINCIPALES]. Incluye [DATOS TÉCNICOS CLAVE]. con certificaciones ISO 9001, ISO 14001, ISO 14002, y ISO 45001.
+**Ejemplos:**
+- Si hay nombre: {template} Anillo de unión (Código: 426954-00) pieza metálica de aluminio...
+- Si NO hay nombre: {template} (Código: 426954-00) pieza metálica de aluminio...
+- JAMÁS usar: {template} [NOMBRE] (Código: XXXXX)...
 
 **Ficha técnica:**
 {pdf_text}
@@ -348,7 +352,19 @@ Genera el párrafo:"""
         """Genera el prompt para la segunda petición (descripción larga)."""
         secciones_text = "\n".join(f"- {s}" for s in secciones)
 
-        return f"""Extrae la información técnica detallada en formato estructurado.
+        return f"""Extrae la información técnica detallada en formato TEXTO PLANO.
+
+**REGLAS DE ORO ANTES DE EMPEZAR:**
+- SOLO extraer información que EXPLÍCITAMENTE APAREZCA en el PDF
+- PROHIBIDO inventar, alucinar o añadir información que no esté en el texto
+- PROHIBITO incluir garantías si no se especifican años en el PDF
+- PROHIBIDO traducir términos técnicos: mantener los nombres originales (ej: "Anillo de unión", no "Ring Coupling")
+- Si un dato no aparece en el PDF, NO incluirlo
+
+**IMPORTANTE: RESPUESTA EN TEXTO PLANO, NO JSON**
+- La respuesta debe ser texto plano con secciones separadas por líneas en blanco
+- PROHIBIDO usar JSON, llaves, comillas, o formato de objeto
+- PROHIBIDO usar ```json o ``` al inicio o final
 
 **Instrucciones CRÍTICAS de formato:**
 - SOLO puedes usar estas secciones MAYÚSCULAS, ninguna otra:
@@ -359,7 +375,7 @@ Genera el párrafo:"""
 - En DIMENSIONES Y PESO: Eliminar cualquier unidad entre paréntesis del nombre del campo y ponerla solo en el valor. Si el PDF dice "Longitud (mm): 352", debes escribir "Longitud: 352 mm". El formato debe ser siempre "Nombre: Valor unidad".
 - NO mezcles múltiples valores en una línea.
 - REGLA DE ORO: Si una sección no tiene al menos UN dato técnico específico y concreto, OMITE ESA SECCIÓN COMPLETAMENTE.
-- Frases que NO son datos útiles y obligan a OMITIR la sección: "No se proporciona", "No disponible", "Ver documentación", "Consultar fabricante", "Datos no especificados", "Información no disponible".
+- Frases que NO son datos útiles y obligan a OMITIR la sección: "No se proporciona", "No disponible", "Ver documentación", "Consultar fabricante", "Datos no especificados", "Información no disponible", "0 yr", "N/A".
 - La primera sección debe ser "INFORMACIÓN GENERAL" con: Artículo, Código.
 - **IMPORTANTE**: Si el producto tiene múltiples potencias o temperaturas de color, buscar en las últimas páginas la tabla de combinaciones. Incluir esta información en una sección llamada "COMBINACIONES DISPONIBLES" con el formato: "Código: Potencia - Temperatura de color - Flujo luminoso".
 - En "NORMAS Y CUMPLIMIENTO" incluir SIEMPRE Y SIN EXCEPCIÓN estas 9 líneas obligatorias, en este orden exacto:
@@ -376,7 +392,7 @@ Genera el párrafo:"""
 
 {lang_instruction}
 
-**Ejemplo de formato CORRECTO:**
+**Ejemplo de formato CORRECTO (texto plano, NO JSON):**
 INFORMACIÓN GENERAL
 Artículo: Garda 4
 Código: 330546-00
@@ -410,7 +426,7 @@ Nota: Declaración Ambiental del Producto (DAP) se debe consultar siempre su dis
 **Ficha técnica a procesar:**
 {pdf_text}
 
-Genera los detalles técnicos siguiendo ESTRICTAMENTE las instrucciones:"""
+Genera los detalles técnicos en TEXTO PLANO siguiendo ESTRICTAMENTE las instrucciones:"""
 
     def _clean_descripcion_corta(self, text: str) -> str:
         """Limpia la respuesta de la descripción corta."""
@@ -449,6 +465,20 @@ Genera los detalles técnicos siguiendo ESTRICTAMENTE las instrucciones:"""
         # Eliminar negritas (**texto**)
         cleaned = re.sub(r'\*\*([^*]+)\*\*', r'\1', cleaned)
 
+        # Eliminar líneas con valores no útiles (garantía 0, N/A, etc.)
+        # Patrón: elimina líneas completas que contienen estos valores
+        useless_lines_patterns = [
+            r'Garantía.*(?:0 yr|0 años|0años)\n',
+            r'Garantía posventa.*(?:0 yr|0 años)\n',
+            r'.*N/A\n',
+            r'.*No disponible\n',
+            r'.*No especificado\n',
+            r'.*No hay información disponible\n',
+        ]
+
+        for pattern in useless_lines_patterns:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+
         # Eliminar secciones completas que contienen información no útil
         # Patrón: NOMBRE SECCION\n\nContenido no útil\n\n
         non_useful_patterns = [
@@ -458,10 +488,27 @@ Genera los detalles técnicos siguiendo ESTRICTAMENTE las instrucciones:"""
             r'[A-ZÁÉÍÓÚÑ\s]+\n\nNo se proporciona información[^\n]+\n\n',
             r'[A-ZÁÉÍÓÚÑ\s]+\n\nVer documentación[^\n]+\n\n',
             r'[A-ZÁÉÍÓÚÑ\s]+\n\nConsultar fabricante[^\n]+\n\n',
+            r'COMBINACIONES DISPONIBLES\n\s*No hay información disponible\s*\n\n',
         ]
 
         for pattern in non_useful_patterns:
             cleaned = re.sub(pattern, '\n\n', cleaned, flags=re.IGNORECASE)
+
+        # Eliminar secciones vacías (solo título sin contenido debajo)
+        # Patrón: NOMBRE SECCION\n\n\n (no hay contenido antes de la siguiente sección)
+        # Buscamos secciones que solo tienen el título y luego doble salto de línea
+        lines = cleaned.split('\n')
+        i = 0
+        while i < len(lines) - 1:
+            # Si línea actual es todo mayúsculas (posible título de sección)
+            # Y la siguiente línea está vacía o es también mayúsculas (otra sección)
+            if lines[i].strip() and lines[i].isupper() and len(lines[i]) > 3:
+                if not lines[i+1].strip() or (lines[i+1].strip() and lines[i+1].isupper() and len(lines[i+1]) > 3):
+                    # Eliminar esta línea (sección vacía)
+                    lines.pop(i)
+                    continue
+            i += 1
+        cleaned = '\n'.join(lines)
 
         # Eliminar líneas vacías excesivas (más de 2 seguidas)
         cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
@@ -477,7 +524,8 @@ def extract_bc3_data(
     pdf_path: str = None,
     model: str = "deepseek-r1:latest",
     target_language: str = 'es',
-    use_cache: bool = True
+    use_cache: bool = True,
+    timeout: int = 600
 ) -> Dict[str, Any]:
     """
     Función auxiliar para extraer datos BC3 con dos peticiones.
@@ -488,9 +536,10 @@ def extract_bc3_data(
         model: Modelo de Ollama a usar
         target_language: Idioma de destino
         use_cache: Si True, usa caché
+        timeout: Timeout en segundos para llamadas a Ollama
 
     Returns:
         Dict con descripcion_corta, descripcion_larga y product_type
     """
-    extractor = BC3Extractor(model=model, use_cache=use_cache)
+    extractor = BC3Extractor(model=model, use_cache=use_cache, timeout=timeout)
     return extractor.extract(pdf_text, pdf_path, target_language)

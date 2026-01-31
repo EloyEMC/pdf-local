@@ -62,6 +62,16 @@ samples/*.pdf
 # Logs
 *.log
 
+# Archivos temporales de procesamiento
+process_log.txt
+processing.pid
+processing_all.log
+process_output.txt
+
+# Archivos de debug temporal
+debug_process.py
+simple_test.py
+
 # Environment
 .env
 .env.local

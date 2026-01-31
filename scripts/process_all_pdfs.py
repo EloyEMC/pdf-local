@@ -24,6 +24,14 @@ def get_all_pdfs(folder_path: str) -> List[Dict[str, str]]:
     folder = Path(folder_path)
 
     for pdf_file in folder.rglob("*.pdf"):
+        # Filtrar archivos ocultos de macOS (._*)
+        if pdf_file.name.startswith('._'):
+            continue
+
+        # Filtrar archivos que comienzan con '.' (ocultos)
+        if pdf_file.name.startswith('.'):
+            continue
+
         codigo = pdf_file.stem  # nombre sin extensión
         pdfs.append({
             'codigo': codigo,
@@ -34,12 +42,20 @@ def get_all_pdfs(folder_path: str) -> List[Dict[str, str]]:
 
 
 def update_database(codigo: str, texto_extraido: str, bc3_data: dict,
-                   model: str, db_path: str) -> bool:
-    """Actualiza un producto en la base de datos con los datos de Ollama."""
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+                   model: str, cursor) -> bool:
+    """Actualiza un producto en la base de datos con los datos de Ollama.
 
+    Args:
+        codigo: Código del producto
+        texto_extraido: Texto extraído del PDF
+        bc3_data: Datos BC3 extraídos
+        model: Modelo de Ollama usado
+        cursor: Cursor de base de datos activo
+
+    Returns:
+        True si se actualizó correctamente
+    """
+    try:
         # Actualizar el producto con datos BC3
         cursor.execute("""
             UPDATE productos
@@ -61,9 +77,6 @@ def update_database(codigo: str, texto_extraido: str, bc3_data: dict,
             codigo,
             codigo
         ))
-
-        conn.commit()
-        conn.close()
 
         return cursor.rowcount > 0
 
@@ -101,82 +114,93 @@ def process_all_pdfs(
         print("No se encontraron PDFs para procesar.")
         return
 
-    # Verificar cuántos ya están procesados
-    if skip_processed:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM productos WHERE ollama_processed = 1')
-        processed_count = cursor.fetchone()[0]
-        conn.close()
+    # Crear una única conexión a la base de datos para todo el proceso
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
 
-        print(f"ℹ️  Productos ya procesados en BD: {processed_count}")
-        print()
-
-    # Procesar cada PDF
-    success_count = 0
-    error_count = 0
-    skipped_count = 0
-
-    for i, pdf_info in enumerate(pdfs, 1):
-        codigo = pdf_info['codigo']
-        ruta = pdf_info['ruta']
-
-        # Verificar si ya está procesado
+    try:
+        # Verificar cuántos ya están procesados
         if skip_processed:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute('SELECT ollama_processed FROM productos WHERE "CÓDIGO" = ? OR REFERENCIA = ?', (codigo, codigo))
-            result = cursor.fetchone()
-            conn.close()
+            cursor.execute('SELECT COUNT(*) FROM productos WHERE ollama_processed = 1')
+            processed_count = cursor.fetchone()[0]
+            print(f"ℹ️  Productos ya procesados en BD: {processed_count}")
+            print()
 
-            if result and result[0]:
-                print(f"[{i}/{total}] ⏭️  {codigo} - Ya procesado")
-                skipped_count += 1
-                continue
+        # Procesar cada PDF
+        success_count = 0
+        error_count = 0
+        skipped_count = 0
+        commit_interval = 50  # Commit cada 50 productos
 
-        print(f"[{i}/{total}] 🔄 {codigo}")
+        for i, pdf_info in enumerate(pdfs, 1):
+            codigo = pdf_info['codigo']
+            ruta = pdf_info['ruta']
 
-        try:
-            # Extraer texto del PDF
-            texto_extraido = extract_pdf_text(ruta, remove_headers=True)
+            # Verificar si ya está procesado
+            if skip_processed:
+                cursor.execute('SELECT ollama_processed FROM productos WHERE "CÓDIGO" = ? OR REFERENCIA = ?', (codigo, codigo))
+                result = cursor.fetchone()
 
-            # Extraer datos BC3
-            bc3_data = extract_bc3_from_pdf(
-                pdf_path=ruta,
-                model=model,
-                target_language=target_language,
-                use_cache=True
-            )
+                if result and result[0]:
+                    print(f"[{i}/{total}] ⏭️  {codigo} - Ya procesado")
+                    skipped_count += 1
+                    continue
 
-            # Actualizar base de datos
-            updated = update_database(
-                codigo=codigo,
-                texto_extraido=texto_extraido,
-                bc3_data=bc3_data,
-                model=model,
-                db_path=db_path
-            )
+            print(f"[{i}/{total}] 🔄 {codigo}")
 
-            if updated:
-                print(f"     ✓ Guardado")
-                success_count += 1
-            else:
-                print(f"     ⚠️  Producto no encontrado en BD")
+            try:
+                # Extraer texto del PDF
+                texto_extraido = extract_pdf_text(ruta, remove_headers=True)
+
+                # Extraer datos BC3
+                bc3_data = extract_bc3_from_pdf(
+                    pdf_path=ruta,
+                    model=model,
+                    target_language=target_language,
+                    use_cache=True
+                )
+
+                # Actualizar base de datos (usando el cursor existente)
+                updated = update_database(
+                    codigo=codigo,
+                    texto_extraido=texto_extraido,
+                    bc3_data=bc3_data,
+                    model=model,
+                    cursor=cursor
+                )
+
+                if updated:
+                    print(f"     ✓ Guardado")
+                    success_count += 1
+                else:
+                    print(f"     ⚠️  Producto no encontrado en BD")
+                    error_count += 1
+
+                # Commit periódico para no perder datos si falla
+                if success_count % commit_interval == 0:
+                    conn.commit()
+                    print(f"     💾 Commit intermedio ({success_count} procesados)")
+
+            except Exception as e:
+                print(f"     ❌ Error: {str(e)[:100]}")
                 error_count += 1
 
-        except Exception as e:
-            print(f"     ❌ Error: {str(e)[:100]}")
-            error_count += 1
+        # Commit final de todos los cambios
+        conn.commit()
 
-    # Resumen
-    print(f"\n{'='*80}")
-    print(f"RESUMEN")
-    print(f"{'='*80}")
-    print(f"Total PDFs: {total}")
-    print(f"✓ Procesados correctamente: {success_count}")
-    print(f"⏭️  Saltados (ya procesados): {skipped_count}")
-    print(f"❌ Errores: {error_count}")
-    print(f"{'='*80}\n")
+        # Resumen
+        print(f"\n{'='*80}")
+        print(f"RESUMEN")
+        print(f"{'='*80}")
+        print(f"Total PDFs: {total}")
+        print(f"✓ Procesados correctamente: {success_count}")
+        print(f"⏭️  Saltados (ya procesados): {skipped_count}")
+        print(f"❌ Errores: {error_count}")
+        print(f"{'='*80}\n")
+
+    finally:
+        # Asegurar que la conexión se cierre siempre
+        conn.close()
 
 
 if __name__ == "__main__":

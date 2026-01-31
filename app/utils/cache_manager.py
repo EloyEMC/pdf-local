@@ -35,8 +35,12 @@ class CacheManager:
         Returns:
             Hash MD5 hexadecimal
         """
+        hash_md5 = hashlib.md5()
+        # Leer en bloques de 4KB para no cargar todo el archivo en memoria
         with open(pdf_path, 'rb') as f:
-            return hashlib.md5(f.read()).hexdigest()
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
 
     def get(self, pdf_path: str, model: str) -> Optional[Dict[str, Any]]:
         """
