@@ -36,9 +36,9 @@ Sistema completo para procesar fichas técnicas en PDF y extraer información es
 
 ## 📋 Requisitos Previos
 
-### 1. Python 3.8+
+### 1. Python 3.11+
 ```bash
-python --version  # Debe ser 3.8 o superior
+python --version  # Debe ser 3.11 o superior
 ```
 
 ### 2. Ollama (Opcional - Para procesamiento local)
