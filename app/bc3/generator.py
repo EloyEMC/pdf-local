@@ -1,5 +1,4 @@
-from typing import Dict, Any, List
-from datetime import datetime
+from typing import Any
 
 
 class BC3Generator:
@@ -8,7 +7,7 @@ class BC3Generator:
     def __init__(self):
         self.records = []
 
-    def generate(self, data: Dict[str, Any) -> str:
+    def generate(self, data: dict[str, Any]) -> str:
         """
         Genera el contenido de un archivo BC3 a partir de los datos extraídos.
 
@@ -39,7 +38,7 @@ class BC3Generator:
         """Añade el registro de versión."""
         self.records.append("~V|BC3|1|")
 
-    def add_concept(self, data: Dict[str, Any]):
+    def add_concept(self, data: dict[str, Any]):
         """Añade el registro de concepto."""
         codigo = data.get("codigo_producto", "001")
         nombre = data.get("nombre", "Producto genérico")
@@ -48,7 +47,7 @@ class BC3Generator:
         # Formato: ~C|{CODIGO}|\{UNIDAD}\{NOMBRE}|
         self.records.append(f"~C|{codigo}|\\{unidad}\\{nombre}|")
 
-    def add_desglose(self, data: Dict[str, Any]):
+    def add_desglose(self, data: dict[str, Any]):
         """Añade el registro de desglose."""
         codigo = data.get("codigo_producto", "001")
         precio = data.get("precio", "0.00")
@@ -65,7 +64,7 @@ class BC3Generator:
         # Formato: ~P|{CODIGO}|\{PRECIO}|
         self.records.append(f"~P|{codigo}|\\{precio}|")
 
-    def add_textos(self, data: Dict[str, Any]):
+    def add_textos(self, data: dict[str, Any]):
         """Añade el registro de textos/observaciones."""
         codigo = data.get("codigo_producto", "001")
 
@@ -102,7 +101,7 @@ class BC3Generator:
             self.records.append(f"~T|{codigo}|\\{texto_completo}|")
 
 
-def generate_bc3_from_dict(data: Dict[str, Any], output_path: str = None) -> str:
+def generate_bc3_from_dict(data: dict[str, Any], output_path: str = None) -> str:
     """
     Genera un archivo BC3 a partir de un diccionario de datos.
 
@@ -117,13 +116,13 @@ def generate_bc3_from_dict(data: Dict[str, Any], output_path: str = None) -> str
     content = generator.generate(data)
 
     if output_path:
-        with open(output_path, 'w', encoding='latin-1') as f:
+        with open(output_path, "w", encoding="latin-1") as f:
             f.write(content)
 
     return content
 
 
-def generate_bc3_with_ollama(data: Dict[str, Any], ollama_client=None) -> str:
+def generate_bc3_with_ollama(data: dict[str, Any], ollama_client=None) -> str:
     """
     Genera un BC3 usando Ollama para crear el formato correcto.
 
